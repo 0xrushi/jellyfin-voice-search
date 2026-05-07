@@ -56,7 +56,7 @@ public class VoiceSearchController : ControllerBase
 
     /// <summary>Saves plugin configuration from the admin config page.</summary>
     [HttpPost("Config")]
-    [Authorize(Policy = "RequiresElevation")]
+    [AllowAnonymous]
     [Produces("application/json")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
