@@ -71,9 +71,10 @@
             Dashboard.showLoadingMsg();
             ApiClient.getPluginConfiguration(VoiceSearchConfig.pluginUniqueId)
                 .then(function (config) {
-                    document.querySelector('#GeminiApiKey').value      = config.GeminiApiKey      || '';
-                    document.querySelector('#AutoPlayThreshold').value = config.AutoPlayThreshold || 85;
-                    document.querySelector('#SuggestThreshold').value  = config.SuggestThreshold  || 60;
+                    // Jellyfin returns camelCase keys from its JSON API
+                    document.querySelector('#GeminiApiKey').value      = config.GeminiApiKey      || config.geminiApiKey      || '';
+                    document.querySelector('#AutoPlayThreshold').value = config.AutoPlayThreshold || config.autoPlayThreshold || 85;
+                    document.querySelector('#SuggestThreshold').value  = config.SuggestThreshold  || config.suggestThreshold  || 60;
                     Dashboard.hideLoadingMsg();
                 });
         });
@@ -84,9 +85,13 @@
             Dashboard.showLoadingMsg();
             ApiClient.getPluginConfiguration(VoiceSearchConfig.pluginUniqueId)
                 .then(function (config) {
-                    config.GeminiApiKey      = document.querySelector('#GeminiApiKey').value;
-                    config.AutoPlayThreshold = parseInt(document.querySelector('#AutoPlayThreshold').value, 10) || 85;
-                    config.SuggestThreshold  = parseInt(document.querySelector('#SuggestThreshold').value,  10) || 60;
+                    // Set both casings so it works regardless of Jellyfin's serializer settings
+                    var key       = document.querySelector('#GeminiApiKey').value;
+                    var autoPlay  = parseInt(document.querySelector('#AutoPlayThreshold').value, 10) || 85;
+                    var suggest   = parseInt(document.querySelector('#SuggestThreshold').value,  10) || 60;
+                    config.GeminiApiKey      = key;       config.geminiApiKey      = key;
+                    config.AutoPlayThreshold = autoPlay;  config.autoPlayThreshold = autoPlay;
+                    config.SuggestThreshold  = suggest;   config.suggestThreshold  = suggest;
                     return ApiClient.updatePluginConfiguration(VoiceSearchConfig.pluginUniqueId, config);
                 })
                 .then(function () {
