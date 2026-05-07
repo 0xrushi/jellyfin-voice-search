@@ -66,16 +66,25 @@ export class VoiceOrchestrator {
           transcript = await this.capture.captureWebSpeech(cfg.language);
         } catch (webSpeechErr) {
           const msg = webSpeechErr instanceof Error ? webSpeechErr.message : String(webSpeechErr);
-          // "network" error = Google STT unreachable (common on HTTP/localhost). Fall through to Gemini.
-          if (!msg.includes('network') || !cfg.geminiApiKey) throw webSpeechErr;
-          toast('Web Speech API unavailable — using Gemini STT');
-          const blob = await this.capture.captureMediaRecorder(
-            cfg.maxRecordingSeconds,
-            cfg.silenceThreshold,
-            (state) => showOverlay(state === 'listening' ? 'listening' : 'processing')
-          );
-          showOverlay('processing');
-          transcript = await transcribeAudio(blob, cfg.geminiApiKey);
+          const isNetworkErr = msg.includes('network');
+          if (!isNetworkErr) throw webSpeechErr;
+          // Google STT unreachable (common on HTTP/localhost). Try Gemini STT or text input.
+          if (cfg.geminiApiKey) {
+            toast('Web Speech unavailable — using Gemini STT');
+            const blob = await this.capture.captureMediaRecorder(
+              cfg.maxRecordingSeconds,
+              cfg.silenceThreshold,
+              (state) => showOverlay(state === 'listening' ? 'listening' : 'processing')
+            );
+            showOverlay('processing');
+            transcript = await transcribeAudio(blob, cfg.geminiApiKey);
+          } else {
+            toast('Web Speech API unavailable — falling back to text input');
+            hideOverlay();
+            setMicActive(false);
+            this.busy = false;
+            return this.handleTextInput();
+          }
         }
       } else if (VoiceCapture.hasMicrophone()) {
         if (!cfg.geminiApiKey) {
@@ -144,8 +153,9 @@ export class VoiceOrchestrator {
     if (cfg.geminiApiKey) {
       intent = await parseIntent(transcript, cfg.geminiApiKey);
     } else {
-      // Without Gemini, treat everything as a play-by-title query
-      intent = { intent: 'play', target: transcript, raw: transcript };
+      // Without Gemini, strip leading command words and treat the rest as a title
+      const cleaned = transcript.replace(/^\s*(play|watch|find|search for|show me|put on)\s+/i, '').trim();
+      intent = { intent: 'play', target: cleaned, raw: transcript };
     }
 
     await this._dispatch(intent, cfg);

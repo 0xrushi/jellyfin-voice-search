@@ -1,10 +1,3 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Voice Search</title>
-</head>
-<body>
 <div id="VoiceSearchConfigPage"
      data-role="page"
      class="page"
@@ -20,9 +13,7 @@
             <form id="VoiceSearchConfigForm">
 
                 <div class="inputContainer">
-                    <label class="inputLabel inputLabelUnfocused" for="GeminiApiKey">
-                        Gemini API Key
-                    </label>
+                    <label class="inputLabel inputLabelUnfocused">Gemini API Key</label>
                     <input id="GeminiApiKey"
                            name="GeminiApiKey"
                            type="password"
@@ -31,41 +22,30 @@
                     <div class="fieldDescription">
                         Required for intent parsing and speech-to-text in Firefox / Safari.
                         Chrome and Edge work without a key via the browser's built-in Web Speech API.
-                        Get a free key at
-                        <a href="https://aistudio.google.com/" target="_blank" rel="noopener">
-                            aistudio.google.com
-                        </a>.
+                        Get a free key at <a href="https://aistudio.google.com/" target="_blank" rel="noopener">aistudio.google.com</a>.
                     </div>
                 </div>
 
                 <div class="inputContainer">
-                    <label class="inputLabel inputLabelUnfocused" for="AutoPlayThreshold">
-                        Auto-play threshold (%)
-                    </label>
+                    <label class="inputLabel inputLabelUnfocused">Auto-play threshold (%)</label>
                     <input id="AutoPlayThreshold"
                            name="AutoPlayThreshold"
                            type="number"
                            min="50" max="100"
                            is="emby-input"
                            class="emby-input" />
-                    <div class="fieldDescription">
-                        Minimum match confidence to auto-play without asking. Default: 85
-                    </div>
+                    <div class="fieldDescription">Minimum match confidence to auto-play without asking. Default: 85</div>
                 </div>
 
                 <div class="inputContainer">
-                    <label class="inputLabel inputLabelUnfocused" for="SuggestThreshold">
-                        Suggest threshold (%)
-                    </label>
+                    <label class="inputLabel inputLabelUnfocused">Suggest threshold (%)</label>
                     <input id="SuggestThreshold"
                            name="SuggestThreshold"
                            type="number"
                            min="20" max="100"
                            is="emby-input"
                            class="emby-input" />
-                    <div class="fieldDescription">
-                        Minimum match confidence to show a "Did you mean?" dialog. Default: 60
-                    </div>
+                    <div class="fieldDescription">Minimum match confidence to show a "Did you mean?" dialog. Default: 60</div>
                 </div>
 
                 <div>
@@ -89,12 +69,11 @@
     document.querySelector('#VoiceSearchConfigPage')
         .addEventListener('pageshow', function () {
             Dashboard.showLoadingMsg();
-
             ApiClient.getPluginConfiguration(VoiceSearchConfig.pluginUniqueId)
                 .then(function (config) {
-                    document.querySelector('#GeminiApiKey').value       = config.GeminiApiKey      || '';
-                    document.querySelector('#AutoPlayThreshold').value  = config.AutoPlayThreshold || 85;
-                    document.querySelector('#SuggestThreshold').value   = config.SuggestThreshold  || 60;
+                    document.querySelector('#GeminiApiKey').value      = config.GeminiApiKey      || '';
+                    document.querySelector('#AutoPlayThreshold').value = config.AutoPlayThreshold || 85;
+                    document.querySelector('#SuggestThreshold').value  = config.SuggestThreshold  || 60;
                     Dashboard.hideLoadingMsg();
                 });
         });
@@ -103,19 +82,15 @@
         .addEventListener('submit', function (e) {
             e.preventDefault();
             Dashboard.showLoadingMsg();
-
             ApiClient.getPluginConfiguration(VoiceSearchConfig.pluginUniqueId)
                 .then(function (config) {
                     config.GeminiApiKey      = document.querySelector('#GeminiApiKey').value;
                     config.AutoPlayThreshold = parseInt(document.querySelector('#AutoPlayThreshold').value, 10) || 85;
                     config.SuggestThreshold  = parseInt(document.querySelector('#SuggestThreshold').value,  10) || 60;
-
-                    ApiClient.updatePluginConfiguration(VoiceSearchConfig.pluginUniqueId, config)
-                        .then(function () {
-                            Dashboard.processPluginConfigurationUpdateResult();
-                        });
+                    return ApiClient.updatePluginConfiguration(VoiceSearchConfig.pluginUniqueId, config);
+                })
+                .then(function () {
+                    Dashboard.processPluginConfigurationUpdateResult();
                 });
         });
 </script>
-</body>
-</html>
