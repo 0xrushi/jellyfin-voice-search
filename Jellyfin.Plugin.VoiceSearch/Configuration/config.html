@@ -10,66 +10,71 @@
                 <h2 class="sectionTitle">Voice Search</h2>
             </div>
 
-            <form id="VoiceSearchConfigForm">
-
-                <div class="inputContainer inputContainer-withDescription">
-                    <input is="emby-input" type="password" id="VsGeminiApiKey"                           label="Gemini API Key" />
-                    <div class="fieldDescription">
-                        Required for intent parsing and STT in Firefox / Safari.
-                        Chrome and Edge use the built-in Web Speech API (no key needed).
-                        Get a free key at <a href="https://aistudio.google.com/" target="_blank" rel="noopener">aistudio.google.com</a>.
-                    </div>
+            <div class="inputContainer inputContainer-withDescription">
+                <input is="emby-input" type="password" id="VsGeminiApiKey"
+                       label="Gemini API Key" />
+                <div class="fieldDescription">
+                    Required for intent parsing and STT in Firefox / Safari.
+                    Chrome and Edge use the built-in Web Speech API (no key needed).
+                    Get a free key at <a href="https://aistudio.google.com/" target="_blank" rel="noopener">aistudio.google.com</a>.
                 </div>
+            </div>
 
-                <div class="inputContainer inputContainer-withDescription">
-                    <input is="emby-input" type="number" id="VsAutoPlay"                           min="50" max="100"
-                           label="Auto-play threshold (%)" />
-                    <div class="fieldDescription">Minimum confidence to auto-play without asking. Default: 85</div>
-                </div>
+            <div class="inputContainer inputContainer-withDescription">
+                <input is="emby-input" type="number" id="VsAutoPlay"
+                       min="50" max="100"
+                       label="Auto-play threshold (%)" />
+                <div class="fieldDescription">Minimum confidence to auto-play without asking. Default: 85</div>
+            </div>
 
-                <div class="inputContainer inputContainer-withDescription">
-                    <input is="emby-input" type="number" id="VsSuggest"                           min="20" max="100"
-                           label="Suggest threshold (%)" />
-                    <div class="fieldDescription">Minimum confidence to show "Did you mean?" dialog. Default: 60</div>
-                </div>
+            <div class="inputContainer inputContainer-withDescription">
+                <input is="emby-input" type="number" id="VsSuggest"
+                       min="20" max="100"
+                       label="Suggest threshold (%)" />
+                <div class="fieldDescription">Minimum confidence to show "Did you mean?" dialog. Default: 60</div>
+            </div>
 
-                <div>
-                    <button is="emby-button" type="submit" class="raised button-submit block emby-button">
-                        <span>Save</span>
-                    </button>
-                </div>
+            <div>
+                <button id="VsSaveBtn" is="emby-button" type="button" class="raised button-submit block">
+                    <span>Save</span>
+                </button>
+            </div>
 
-            </form>
         </div>
     </div>
 </div>
 
 <script type="text/javascript">
-    var VoiceSearchConfigId = 'c3d4e5f6-a1b2-4567-89ab-cdef01234567';
+(function () {
+    var id = 'c3d4e5f6-a1b2-4567-89ab-cdef01234567';
 
-    document.querySelector('#VoiceSearchConfigPage')
-        .addEventListener('pageshow', function () {
-            Dashboard.showLoadingMsg();
-            ApiClient.getPluginConfiguration(VoiceSearchConfigId).then(function (config) {
-                document.querySelector('#VsGeminiApiKey').value = config.GeminiApiKey      || '';
-                document.querySelector('#VsAutoPlay').value     = config.AutoPlayThreshold || 85;
-                document.querySelector('#VsSuggest').value      = config.SuggestThreshold  || 60;
-                Dashboard.hideLoadingMsg();
-            });
-        });
+    function loadConfig() {
+        ApiClient.getPluginConfiguration(id).then(function (config) {
+            document.getElementById('VsGeminiApiKey').value = config.GeminiApiKey      || '';
+            document.getElementById('VsAutoPlay').value     = config.AutoPlayThreshold || 85;
+            document.getElementById('VsSuggest').value      = config.SuggestThreshold  || 60;
+            Dashboard.hideLoadingMsg();
+        }).catch(function (e) { console.error('[VoiceSearch] load failed', e); });
+    }
 
-    document.querySelector('#VoiceSearchConfigForm')
-        .addEventListener('submit', function (e) {
-            Dashboard.showLoadingMsg();
-            ApiClient.getPluginConfiguration(VoiceSearchConfigId).then(function (config) {
-                config.GeminiApiKey      = document.querySelector('#VsGeminiApiKey').value;
-                config.AutoPlayThreshold = parseInt(document.querySelector('#VsAutoPlay').value, 10) || 85;
-                config.SuggestThreshold  = parseInt(document.querySelector('#VsSuggest').value,  10) || 60;
-                ApiClient.updatePluginConfiguration(VoiceSearchConfigId, config).then(function (result) {
-                    Dashboard.processPluginConfigurationUpdateResult(result);
-                });
-            });
-            e.preventDefault();
-            return false;
-        });
+    function saveConfig() {
+        Dashboard.showLoadingMsg();
+        ApiClient.getPluginConfiguration(id).then(function (config) {
+            config.GeminiApiKey      = document.getElementById('VsGeminiApiKey').value;
+            config.AutoPlayThreshold = parseInt(document.getElementById('VsAutoPlay').value, 10) || 85;
+            config.SuggestThreshold  = parseInt(document.getElementById('VsSuggest').value,  10) || 60;
+            return ApiClient.updatePluginConfiguration(id, config);
+        }).then(function (result) {
+            Dashboard.processPluginConfigurationUpdateResult(result);
+        }).catch(function (e) { console.error('[VoiceSearch] save failed', e); Dashboard.hideLoadingMsg(); });
+    }
+
+    // Attach handlers directly — DOM is available when script runs
+    document.getElementById('VsSaveBtn').addEventListener('click', saveConfig);
+
+    document.getElementById('VoiceSearchConfigPage').addEventListener('pageshow', function () {
+        Dashboard.showLoadingMsg();
+        loadConfig();
+    });
+})();
 </script>
