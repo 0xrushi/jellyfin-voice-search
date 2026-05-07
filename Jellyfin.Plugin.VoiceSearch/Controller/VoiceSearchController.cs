@@ -37,11 +37,7 @@ public class VoiceSearchController : ControllerBase
         return File(stream, "application/javascript");
     }
 
-    /// <summary>
-    /// Returns plugin configuration to the client-side script.
-    /// The Gemini API key is served from the server so users configure it once
-    /// in the admin dashboard rather than in each browser's localStorage.
-    /// </summary>
+    /// <summary>Returns plugin configuration to the client-side script.</summary>
     [HttpGet("Config")]
     [AllowAnonymous]
     [Produces("application/json")]
@@ -56,6 +52,25 @@ public class VoiceSearchController : ControllerBase
             AutoPlayThreshold = cfg.AutoPlayThreshold,
             SuggestThreshold  = cfg.SuggestThreshold,
         });
+    }
+
+    /// <summary>Saves plugin configuration from the admin config page.</summary>
+    [HttpPost("Config")]
+    [Authorize(Policy = "RequiresElevation")]
+    [Produces("application/json")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public IActionResult SaveConfig([FromBody] ClientConfig body)
+    {
+        var plugin = VoiceSearchPlugin.Instance;
+        if (plugin is null) return StatusCode(503);
+
+        plugin.Configuration.GeminiApiKey      = body.GeminiApiKey ?? string.Empty;
+        plugin.Configuration.AutoPlayThreshold = body.AutoPlayThreshold > 0 ? body.AutoPlayThreshold : 85;
+        plugin.Configuration.SuggestThreshold  = body.SuggestThreshold  > 0 ? body.SuggestThreshold  : 60;
+        plugin.SaveConfiguration();
+
+        return Ok(new { saved = true });
     }
 }
 
