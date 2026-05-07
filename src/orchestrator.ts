@@ -62,8 +62,21 @@ export class VoiceOrchestrator {
       let transcript: string;
 
       if (VoiceCapture.hasWebSpeech()) {
-        // Use browser built-in Speech Recognition (Chrome/Edge)
-        transcript = await this.capture.captureWebSpeech(cfg.language);
+        try {
+          transcript = await this.capture.captureWebSpeech(cfg.language);
+        } catch (webSpeechErr) {
+          const msg = webSpeechErr instanceof Error ? webSpeechErr.message : String(webSpeechErr);
+          // "network" error = Google STT unreachable (common on HTTP/localhost). Fall through to Gemini.
+          if (!msg.includes('network') || !cfg.geminiApiKey) throw webSpeechErr;
+          toast('Web Speech API unavailable — using Gemini STT');
+          const blob = await this.capture.captureMediaRecorder(
+            cfg.maxRecordingSeconds,
+            cfg.silenceThreshold,
+            (state) => showOverlay(state === 'listening' ? 'listening' : 'processing')
+          );
+          showOverlay('processing');
+          transcript = await transcribeAudio(blob, cfg.geminiApiKey);
+        }
       } else if (VoiceCapture.hasMicrophone()) {
         if (!cfg.geminiApiKey) {
           this._noKeyFallback(cfg);
