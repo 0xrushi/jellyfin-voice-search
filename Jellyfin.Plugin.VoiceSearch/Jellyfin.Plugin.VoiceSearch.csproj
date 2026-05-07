@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>Jellyfin.Plugin.VoiceSearch</AssemblyName>
+    <RootNamespace>Jellyfin.Plugin.VoiceSearch</RootNamespace>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>1591</NoWarn>
+    <Nullable>enable</Nullable>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Version>1.0.0.0</Version>
+    <Platforms>x64;x86</Platforms>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ExcludeAssets="runtime" prevents Jellyfin's own DLLs from being copied
+         into the plugin output — they're already present on the server. -->
+    <PackageReference Include="Jellyfin.Common" Version="10.10.7" ExcludeAssets="runtime" />
+    <PackageReference Include="Jellyfin.Model" Version="10.10.7" ExcludeAssets="runtime" />
+    <PackageReference Include="Jellyfin.Controller" Version="10.10.7" ExcludeAssets="runtime" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <!--
+    voiceSearch.js is compiled from TypeScript by webpack BEFORE dotnet build.
+    Run: npm run build   (from the repo root) then: dotnet build
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Configuration\config.html" />
+    <EmbeddedResource Include="Inject\voiceSearch.js" />
+  </ItemGroup>
+
+  <!-- Post-build: copy DLL to local Jellyfin plugin dir for quick dev iteration -->
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <ItemGroup>
+      <PluginDirs Include="$(JELLYFIN_DATA_DIR)\plugins\VoiceSearch_$(Version)" />
+      <PluginDirs Include="$(HOME)\.jellyfin\plugins\VoiceSearch_$(Version)" />
+      <PluginDirs Include="/var/lib/jellyfin/plugins/VoiceSearch_$(Version)" />
+    </ItemGroup>
+    <Copy
+      SourceFiles="$(OutputPath)$(AssemblyName).dll"
+      DestinationFolder="%(PluginDirs.Identity)"
+      Condition="Exists('$([System.IO.Path]::GetDirectoryName(%(PluginDirs.Identity)))')"
+      ContinueOnError="true" />
+    <Copy
+      SourceFiles="$(MSBuildProjectDirectory)\meta.json"
+      DestinationFolder="%(PluginDirs.Identity)"
+      Condition="Exists('$([System.IO.Path]::GetDirectoryName(%(PluginDirs.Identity)))')"
+      ContinueOnError="true" />
+  </Target>
+
+</Project>

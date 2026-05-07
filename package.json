@@ -1,0 +1,19 @@
+{
+  "name": "jellyfin-voice-search",
+  "version": "1.0.0",
+  "description": "Voice search and playback control plugin for Jellyfin Web",
+  "scripts": {
+    "build": "webpack --config webpack.config.js",
+    "build:prod": "webpack --config webpack.config.js --mode production --optimization-minimize",
+    "dev": "webpack --config webpack.config.js --watch",
+    "typecheck": "tsc --noEmit",
+    "dist": "npm run build:prod && dotnet build Jellyfin.Plugin.VoiceSearch/Jellyfin.Plugin.VoiceSearch.csproj -c Release"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-loader": "^9.5.0",
+    "typescript": "^5.4.0",
+    "webpack": "^5.94.0",
+    "webpack-cli": "^5.1.0"
+  }
+}

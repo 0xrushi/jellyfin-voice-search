@@ -1,0 +1,7 @@
+node_modules/
+dist/
+Jellyfin.Plugin.VoiceSearch/bin/
+Jellyfin.Plugin.VoiceSearch/obj/
+Jellyfin.Plugin.VoiceSearch/Inject/voiceSearch.js
+*.user
+.DS_Store
