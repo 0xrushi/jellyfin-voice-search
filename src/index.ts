@@ -3,6 +3,30 @@ import { injectToolbarButton } from './ui';
 import { fetchServerConfig, loadConfig, saveConfig } from './config';
 import { toast } from './ui';
 
+// Minimal jQuery stub so Jellyfin's viewContainer.js executes plugin config page scripts.
+// viewContainer checks `window.$` before using `$(view).appendTo(parent)` — without jQuery
+// globally available (Jellyfin 10.10 dropped it), it falls back to replaceChild which never
+// executes inline <script> tags. Our stub implements just enough to make scripts run.
+(function installJQueryStub() {
+  const win = window as any;
+  if (win.$) return;
+  function jq(elem: Element) {
+    return {
+      appendTo(parent: Element) {
+        parent.appendChild(elem);
+        elem.querySelectorAll('script').forEach((old) => {
+          const s = document.createElement('script');
+          s.textContent = (old as HTMLScriptElement).text || old.textContent || '';
+          document.head.appendChild(s);
+        });
+        return [elem];
+      },
+    };
+  }
+  (jq as any).mobile = {};
+  win.$ = jq;
+})();
+
 const orchestrator = new VoiceOrchestrator();
 
 function injectButton(): void {

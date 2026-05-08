@@ -9,7 +9,7 @@ the browser-native equivalent of [kodi-voice-search](../kodi-voice-search).
 |---|---|
 | Jellyfin Server ≥ 10.10 | .NET 8 build |
 | **File Transformation plugin** | Required — installs from the Jellyfin plugin catalogue |
-| Gemini API key (optional) | Only needed in Firefox/Safari. Chrome/Edge use the built-in Web Speech API for free. |
+| Gemini API key (optional) | Strongly recommended. Without it, only basic title-exact search works via Chrome/Edge Web Speech API. With it: full intent parsing, Gemini-powered semantic search, and STT in all browsers. Get a free key at [aistudio.google.com](https://aistudio.google.com). |
 
 ## How it works
 
@@ -27,21 +27,23 @@ Browser loads Jellyfin Web
                  └─ Keyboard: ` (backtick) or Ctrl+Shift+V
 ```
 
-### Voice pipeline (mirrors kodi-voice-search)
+### Voice pipeline
 
 ```
 Key press / mic button click
          ↓
 VoiceCapture
-  Chrome/Edge → Web Speech API (no API key needed)
+  Chrome/Edge → Web Speech API (no API key needed; falls back to Gemini STT on network error)
   Firefox/Safari → MediaRecorder + AudioContext VAD → Gemini STT
          ↓
-parseIntent()  → Gemini REST → structured JSON
-  { intent: "play", target: "Breaking Bad", season: 2, episode: 5 }
+parseIntent()  → Gemini Flash REST → structured JSON
+  { intent: "play", target: "Chainsaw Man", season: null, episode: null }
          ↓
 VoiceOrchestrator._dispatch()
-  ├─ search: Jellyfin /Users/{id}/Items API + token-similarity scoring
-  └─ control: window.playbackManager / Jellyfin Sessions API
+  ├─ search: Jellyfin /Users/{id}/Items API
+  │          → Gemini Flash re-ranks candidates (results cached in localStorage)
+  │          → navigate to item detail page + click .btnPlay
+  └─ control: Jellyfin Sessions API (pause/stop/seek/volume/mute)
 ```
 
 ### Confidence tiers
@@ -52,20 +54,28 @@ VoiceOrchestrator._dispatch()
 | 60–85 % | Show "Did you mean?" dialog |
 | < 60 % | Toast "no confident match" |
 
+Scores come from Gemini Flash's semantic ranking (0.0–1.0). Without a key, a token-overlap
+fallback is used (prefix matches score 1.0, Jaccard elsewhere).
+
 ## Supported voice commands
 
 | Example | Intent |
 |---|---|
-| *"play Succession season 3 episode 5"* | `play` |
+| *"play Chainsaw Man"* | `play` |
+| *"can you please play Succession season 3 episode 5"* | `play` |
 | *"find something with Cate Blanchett"* | `play_actor` |
 | *"something where a robot falls in love"* | `play_plot` |
 | *"something like Parasite"* | `play_similar` |
 | *"pause"* | `pause` |
+| *"stop"* | `stop` |
 | *"go back 30 seconds"* | `seek` |
 | *"skip ahead 2 minutes"* | `seek` |
 | *"set speed to 1.5"* | `speed` |
 | *"volume up"* / *"set volume to 40"* | `volume_up` / `volume_set` |
 | *"mute"* | `mute` |
+
+Conversational phrasing works ("can you please play…", "hey put on…") — Gemini handles
+natural language intent extraction.
 
 ## Building
 
@@ -89,27 +99,28 @@ The NuGet packages come from the Jellyfin feed (`nuget.config` is included).
 
 ## Installation
 
-1. Build (see above) or download a release `.dll`
-2. Copy `Jellyfin.Plugin.VoiceSearch.dll` into your Jellyfin plugins directory:
-   - **Linux/Docker:** `/var/lib/jellyfin/plugins/VoiceSearch_1.0.0.0/`
+1. Build (see above) or download a release `.dll` and `meta.json`
+2. Copy both files into your Jellyfin plugins directory:
+   - **Linux/Docker:** `/config/plugins/VoiceSearch_1.0.0.0/`
    - **Windows:** `%PROGRAMDATA%\Jellyfin\Server\plugins\VoiceSearch_1.0.0.0\`
-3. Also install the **File Transformation** plugin from the Jellyfin plugin catalogue
+3. Install the **File Transformation** plugin from the Jellyfin plugin catalogue
 4. Restart Jellyfin
-5. (Optional) Go to **Dashboard → Plugins → Voice Search** and paste your Gemini API key
+5. Go to **Dashboard → Plugins → Voice Search** and paste your Gemini API key
 
 ## Configuration
 
 | Setting | Default | Description |
 |---|---|---|
-| Gemini API key | _(empty)_ | Used for intent parsing + STT in non-Chrome browsers |
+| Gemini API key | _(empty)_ | Used for intent parsing, semantic search ranking, and STT in non-Chrome browsers |
 | Auto-play threshold | 85 % | Confidence above which the top result plays automatically |
 | Suggest threshold | 60 % | Confidence above which a "Did you mean?" dialog appears |
 
-Per-browser overrides (for testing) via the browser console:
+Per-browser overrides via the browser console:
 ```js
 window.jellyfinVoiceSearch.configure({ geminiApiKey: 'AIza...', autoPlayThreshold: 75 });
 window.jellyfinVoiceSearch.getConfig();   // inspect current config
 window.jellyfinVoiceSearch.activate();    // trigger voice input programmatically
+window.jellyfinVoiceSearch.textSearch();  // trigger text input fallback
 ```
 
 ## Project structure
@@ -121,25 +132,50 @@ jellyfin-voice-search/
 │   ├── config.ts                           Loads config (server API → localStorage)
 │   ├── voice.ts                            Web Speech API + MediaRecorder + VAD
 │   ├── stt.ts                              Gemini REST speech-to-text
-│   ├── intent.ts                           Gemini REST intent parser
-│   ├── search.ts                           Jellyfin Items API + token-similarity
-│   ├── playback.ts                         playbackManager / Sessions API
+│   ├── intent.ts                           Gemini Flash REST intent parser
+│   ├── embed.ts                            Gemini Flash candidate re-ranker + localStorage cache
+│   ├── search.ts                           Jellyfin Items API + Gemini semantic ranking
+│   ├── playback.ts                         Navigate to item page + click play button
 │   ├── ui.ts                               Mic button, overlay, toasts, results dialog
 │   ├── orchestrator.ts                     Main pipeline
-│   └── index.ts                            Entry point + keyboard shortcuts
+│   └── index.ts                            Entry point, keyboard shortcuts, jQuery stub
 │
 ├── Jellyfin.Plugin.VoiceSearch/            C# .NET 8 plugin
 │   ├── VoiceSearchPlugin.cs                BasePlugin, IHasWebPages
 │   ├── Services/StartupService.cs          IScheduledTask → registers FileTransformation
 │   ├── Helpers/TransformationPatches.cs    index.html callback (injects <script>)
-│   ├── Controller/VoiceSearchController.cs GET /VoiceSearch/Script + /VoiceSearch/Config
+│   ├── Controller/VoiceSearchController.cs GET /VoiceSearch/Script + GET|POST /VoiceSearch/Config
 │   ├── Configuration/PluginConfiguration.cs Server-side config model
 │   ├── Configuration/config.html           Admin dashboard UI
 │   ├── Model/PatchRequestPayload.cs        FileTransformation callback contract
 │   └── Inject/voiceSearch.js               ← webpack output, embedded as resource
 │
+├── meta.json                               Plugin manifest (required alongside DLL)
 ├── webpack.config.js                       Outputs to Inject/ for embedding
 ├── tsconfig.json
 ├── package.json
 └── nuget.config                            Adds Jellyfin NuGet feed
 ```
+
+## Architecture notes
+
+### Search ranking
+Jellyfin's built-in search (`/Users/{id}/Items?searchTerm=…`) does the initial candidate
+retrieval (up to 30 results). A single Gemini Flash call then scores each candidate 0–1
+against the spoken query. Scores are cached in `localStorage` keyed by
+`query|candidate1|candidate2|…`, so the same query is instant on the second invocation.
+
+Without a Gemini key, a local fallback scores by token overlap (Jaccard) with a prefix-match
+boost (exact prefix → 1.0), which handles simple cases like "chainsaw man" → "Chainsaw Man - The Movie: Reze Arc".
+
+### Config page script execution
+Jellyfin 10.10 dropped jQuery as a global, which broke inline `<script>` execution in plugin
+config pages (`viewContainer.js` only runs scripts when `window.$` is truthy). `index.ts`
+installs a minimal `window.$` stub with an `appendTo` implementation that re-executes script
+tags, restoring the standard Jellyfin plugin config page behaviour.
+
+### Playback
+`window.playbackManager` is an ES module export — it is never attached to `window`. Playback
+is triggered by navigating to the item's detail page and programmatically clicking
+`.btnPlay:not(.hide)` (old UI) or `.btnPlayOrResume:not(.hide)` (experimental React UI) once
+it appears in the DOM.

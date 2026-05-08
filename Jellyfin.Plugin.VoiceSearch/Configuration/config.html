@@ -42,39 +42,39 @@
 
         </div>
     </div>
+
+    <script type="text/javascript">
+    (function () {
+        var id = 'c3d4e5f6-a1b2-4567-89ab-cdef01234567';
+
+        function loadConfig() {
+            ApiClient.getPluginConfiguration(id).then(function (config) {
+                document.getElementById('VsGeminiApiKey').value = config.GeminiApiKey      || '';
+                document.getElementById('VsAutoPlay').value     = config.AutoPlayThreshold || 85;
+                document.getElementById('VsSuggest').value      = config.SuggestThreshold  || 60;
+                Dashboard.hideLoadingMsg();
+            }).catch(function (e) { console.error('[VoiceSearch] load failed', e); });
+        }
+
+        function saveConfig() {
+            Dashboard.showLoadingMsg();
+            ApiClient.getPluginConfiguration(id).then(function (config) {
+                config.GeminiApiKey      = document.getElementById('VsGeminiApiKey').value;
+                config.AutoPlayThreshold = parseInt(document.getElementById('VsAutoPlay').value, 10) || 85;
+                config.SuggestThreshold  = parseInt(document.getElementById('VsSuggest').value,  10) || 60;
+                return ApiClient.updatePluginConfiguration(id, config);
+            }).then(function (result) {
+                Dashboard.processPluginConfigurationUpdateResult(result);
+            }).catch(function (e) { console.error('[VoiceSearch] save failed', e); Dashboard.hideLoadingMsg(); });
+        }
+
+        document.getElementById('VsSaveBtn').addEventListener('click', saveConfig);
+
+        document.getElementById('VoiceSearchConfigPage').addEventListener('pageshow', function () {
+            Dashboard.showLoadingMsg();
+            loadConfig();
+        });
+    })();
+    </script>
+
 </div>
-
-<script type="text/javascript">
-(function () {
-    var id = 'c3d4e5f6-a1b2-4567-89ab-cdef01234567';
-
-    function loadConfig() {
-        ApiClient.getPluginConfiguration(id).then(function (config) {
-            document.getElementById('VsGeminiApiKey').value = config.GeminiApiKey      || '';
-            document.getElementById('VsAutoPlay').value     = config.AutoPlayThreshold || 85;
-            document.getElementById('VsSuggest').value      = config.SuggestThreshold  || 60;
-            Dashboard.hideLoadingMsg();
-        }).catch(function (e) { console.error('[VoiceSearch] load failed', e); });
-    }
-
-    function saveConfig() {
-        Dashboard.showLoadingMsg();
-        ApiClient.getPluginConfiguration(id).then(function (config) {
-            config.GeminiApiKey      = document.getElementById('VsGeminiApiKey').value;
-            config.AutoPlayThreshold = parseInt(document.getElementById('VsAutoPlay').value, 10) || 85;
-            config.SuggestThreshold  = parseInt(document.getElementById('VsSuggest').value,  10) || 60;
-            return ApiClient.updatePluginConfiguration(id, config);
-        }).then(function (result) {
-            Dashboard.processPluginConfigurationUpdateResult(result);
-        }).catch(function (e) { console.error('[VoiceSearch] save failed', e); Dashboard.hideLoadingMsg(); });
-    }
-
-    // Attach handlers directly — DOM is available when script runs
-    document.getElementById('VsSaveBtn').addEventListener('click', saveConfig);
-
-    document.getElementById('VoiceSearchConfigPage').addEventListener('pageshow', function () {
-        Dashboard.showLoadingMsg();
-        loadConfig();
-    });
-})();
-</script>

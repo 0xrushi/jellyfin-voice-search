@@ -27,7 +27,7 @@ import {
   setMicActive,
   promptText,
 } from './ui';
-import { loadConfig } from './config';
+import { fetchServerConfig, loadConfig } from './config';
 
 const AUTO_PLAY = 0.85;
 const SUGGEST   = 0.60;
@@ -56,6 +56,7 @@ export class VoiceOrchestrator {
     setMicActive(true);
     showOverlay('listening');
 
+    await fetchServerConfig();
     const cfg = loadConfig();
 
     try {
@@ -127,6 +128,7 @@ export class VoiceOrchestrator {
     if (!text?.trim()) return;
 
     showOverlay('processing');
+    await fetchServerConfig();
     const cfg = loadConfig();
     try {
       await this._processTranscript(text.trim(), cfg);
@@ -153,8 +155,11 @@ export class VoiceOrchestrator {
     if (cfg.geminiApiKey) {
       intent = await parseIntent(transcript, cfg.geminiApiKey);
     } else {
-      // Without Gemini, strip leading command words and treat the rest as a title
-      const cleaned = transcript.replace(/^\s*(play|watch|find|search for|show me|put on)\s+/i, '').trim();
+      // Without Gemini, strip conversational/command prefix and treat the rest as a title
+      const cleaned = transcript
+        .replace(/^\s*(can you |please |could you |hey |ok |okay )*/i, '')
+        .replace(/^\s*(play|watch|find|search for|show me|put on|queue|start)\s+/i, '')
+        .trim();
       intent = { intent: 'play', target: cleaned, raw: transcript };
     }
 
@@ -164,9 +169,9 @@ export class VoiceOrchestrator {
   private async _dispatch(intent: Intent, cfg: VoiceConfig): Promise<void> {
     switch (intent.intent) {
       case 'play':        return this._handlePlay(intent, cfg);
-      case 'play_actor':  return this._handlePlayActor(intent);
-      case 'play_plot':   return this._handlePlayPlot(intent);
-      case 'play_similar':return this._handlePlaySimilar(intent);
+      case 'play_actor':  return this._handlePlayActor(intent, cfg);
+      case 'play_plot':   return this._handlePlayPlot(intent, cfg);
+      case 'play_similar':return this._handlePlaySimilar(intent, cfg);
 
       case 'pause':
         await pausePlayback(); toast('Toggled pause'); break;
@@ -220,7 +225,7 @@ export class VoiceOrchestrator {
   private async _handlePlay(intent: Intent, cfg: VoiceConfig): Promise<void> {
     if (!intent.target) { toast('No title specified'); return; }
 
-    const results = await searchByTitle(intent.target, intent.season, intent.episode);
+    const results = await searchByTitle(intent.target, intent.season, intent.episode, cfg.geminiApiKey);
     if (results.length === 0) { toast(`Nothing found for "${intent.target}"`); return; }
 
     const best = results[0];
@@ -244,7 +249,7 @@ export class VoiceOrchestrator {
     }
   }
 
-  private async _handlePlayActor(intent: Intent): Promise<void> {
+  private async _handlePlayActor(intent: Intent, cfg: VoiceConfig): Promise<void> {
     if (!intent.actor) { toast('No actor specified'); return; }
 
     const results = await searchByActor(intent.actor);
@@ -260,10 +265,10 @@ export class VoiceOrchestrator {
     );
   }
 
-  private async _handlePlayPlot(intent: Intent): Promise<void> {
+  private async _handlePlayPlot(intent: Intent, cfg: VoiceConfig): Promise<void> {
     if (!intent.description) { toast('No description provided'); return; }
 
-    const results = await searchByPlot(intent.description);
+    const results = await searchByPlot(intent.description, cfg.geminiApiKey);
     if (results.length === 0) { toast('No matching content found'); return; }
 
     showResultsDialog(
@@ -276,10 +281,10 @@ export class VoiceOrchestrator {
     );
   }
 
-  private async _handlePlaySimilar(intent: Intent): Promise<void> {
+  private async _handlePlaySimilar(intent: Intent, cfg: VoiceConfig): Promise<void> {
     if (!intent.reference) { toast('No reference title specified'); return; }
 
-    const results = await searchSimilar(intent.reference);
+    const results = await searchSimilar(intent.reference, cfg.geminiApiKey);
     if (results.length === 0) { toast(`Nothing similar to "${intent.reference}"`); return; }
 
     showResultsDialog(

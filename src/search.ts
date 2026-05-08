@@ -1,4 +1,5 @@
 import type { JellyfinItem, SearchResult } from './types';
+import { rankByEmbedding } from './embed';
 
 // ---------------------------------------------------------------------------
 // Jellyfin API helpers
@@ -49,7 +50,7 @@ async function fetchItems(params: Record<string, string | number | boolean>): Pr
 }
 
 // ---------------------------------------------------------------------------
-// Text normalisation & fuzzy scoring
+// Legacy token-based scoring (fallback when no API key)
 // ---------------------------------------------------------------------------
 
 function normalize(s: string): string {
@@ -63,7 +64,6 @@ function normalize(s: string): string {
     .trim();
 }
 
-// Jaccard similarity over word tokens
 function tokenSim(a: string, b: string): number {
   const tA = new Set(normalize(a).split(' ').filter(Boolean));
   const tB = new Set(normalize(b).split(' ').filter(Boolean));
@@ -71,6 +71,21 @@ function tokenSim(a: string, b: string): number {
   const inter = [...tA].filter((x) => tB.has(x)).length;
   return inter / (tA.size + tB.size - inter);
 }
+
+function prefixScore(query: string, name: string): number {
+  const qTokens = normalize(query).split(' ').filter(Boolean);
+  const nTokens = normalize(name).split(' ').filter(Boolean);
+  if (qTokens.length === 0 || nTokens.length < qTokens.length) return 0;
+  return qTokens.every((t, i) => nTokens[i] === t) ? 1.0 : 0;
+}
+
+function legacyScore(query: string, name: string): number {
+  return Math.max(tokenSim(query, name), prefixScore(query, name));
+}
+
+// ---------------------------------------------------------------------------
+// Display helpers
+// ---------------------------------------------------------------------------
 
 function displayLabel(item: JellyfinItem): string {
   if (item.Type === 'Episode') {
@@ -91,7 +106,8 @@ function displayLabel(item: JellyfinItem): string {
 export async function searchByTitle(
   title: string,
   season?: number,
-  episode?: number
+  episode?: number,
+  apiKey?: string
 ): Promise<SearchResult[]> {
   const items = await fetchItems({
     searchTerm: title,
@@ -101,23 +117,24 @@ export async function searchByTitle(
     Limit: 30,
   });
 
+  if (items.length === 0) return [];
+
+  const candidates = items.map(item => item.SeriesName ?? item.Name);
+
+  const rawScores = apiKey
+    ? await rankByEmbedding(title, candidates, apiKey)
+    : candidates.map(name => legacyScore(title, name));
+
   return items
-    .map((item): SearchResult => {
-      const nameToMatch = item.SeriesName ?? item.Name;
-      let score = tokenSim(title, nameToMatch);
-
+    .map((item, i): SearchResult => {
+      let score = rawScores[i];
       if (item.Type === 'Episode') {
-        if (season !== undefined) {
-          score += item.ParentIndexNumber === season ? 0.15 : -0.3;
-        }
-        if (episode !== undefined) {
-          score += item.IndexNumber === episode ? 0.15 : -0.3;
-        }
+        if (season   !== undefined) score += item.ParentIndexNumber === season  ? 0.05 : -0.1;
+        if (episode  !== undefined) score += item.IndexNumber       === episode ? 0.05 : -0.1;
       }
-
       return { item, score: Math.min(1, Math.max(0, score)), display: displayLabel(item) };
     })
-    .filter((r) => r.score > 0.15)
+    .filter(r => r.score > (apiKey ? 0.3 : 0.15))
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
 }
@@ -139,26 +156,36 @@ export async function searchByActor(actorName: string): Promise<SearchResult[]> 
   }));
 }
 
-export async function searchByPlot(description: string): Promise<SearchResult[]> {
+export async function searchByPlot(description: string, apiKey?: string): Promise<SearchResult[]> {
   const items = await fetchItems({
     searchTerm: description,
     IncludeItemTypes: 'Movie,Series',
     Recursive: true,
     Fields: 'Overview',
-    Limit: 25,
+    Limit: 30,
   });
 
-  return items
-    .map((item): SearchResult => {
-      const score = item.Overview ? Math.min(1, tokenSim(description, item.Overview) * 3) : 0;
-      return { item, score, display: displayLabel(item) };
-    })
-    .filter((r) => r.score > 0.05)
+  const withOverview = items.filter(i => i.Overview);
+  if (withOverview.length === 0) return [];
+
+  const overviews = withOverview.map(i => i.Overview!);
+
+  const rawScores = apiKey
+    ? await rankByEmbedding(description, overviews, apiKey)
+    : overviews.map(ov => Math.min(1, tokenSim(description, ov) * 3));
+
+  return withOverview
+    .map((item, i): SearchResult => ({
+      item,
+      score: rawScores[i],
+      display: displayLabel(item),
+    }))
+    .filter(r => r.score > (apiKey ? 0.4 : 0.05))
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
 }
 
-export async function searchSimilar(reference: string): Promise<SearchResult[]> {
+export async function searchSimilar(reference: string, apiKey?: string): Promise<SearchResult[]> {
   const refItems = await fetchItems({
     searchTerm: reference,
     IncludeItemTypes: 'Movie,Series',
@@ -180,14 +207,22 @@ export async function searchSimilar(reference: string): Promise<SearchResult[]> 
     SortBy: 'Random',
   });
 
-  return candidates
-    .filter((item) => item.Id !== refId && item.Overview)
-    .map((item): SearchResult => ({
+  const withOverview = candidates.filter(item => item.Id !== refId && item.Overview);
+  if (withOverview.length === 0) return [];
+
+  const overviews = withOverview.map(i => i.Overview!);
+
+  const rawScores = apiKey
+    ? await rankByEmbedding(refOverview, overviews, apiKey)
+    : overviews.map(ov => Math.min(1, tokenSim(refOverview, ov) * 2));
+
+  return withOverview
+    .map((item, i): SearchResult => ({
       item,
-      score: Math.min(1, tokenSim(refOverview, item.Overview!) * 2),
+      score: rawScores[i],
       display: displayLabel(item),
     }))
-    .filter((r) => r.score > 0.1)
+    .filter(r => r.score > (apiKey ? 0.4 : 0.1))
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
 }

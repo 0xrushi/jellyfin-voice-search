@@ -54,16 +54,27 @@ export function navigateToItem(item: JellyfinItem): void {
 }
 
 export async function playItem(item: JellyfinItem): Promise<void> {
-  const manager = pm();
-  if (manager?.play) {
-    try {
-      await manager.play({ items: [item], startIndex: 0 });
-      return;
-    } catch {
-      // fall through to navigation
-    }
-  }
   navigateToItem(item);
+  // Click the play/resume button once the detail page renders.
+  // Old UI uses .btnPlay; experimental React UI uses .btnPlayOrResume.
+  await clickWhenReady('.btnPlay:not(.hide), .btnPlayOrResume:not(.hide)', 6000);
+}
+
+function clickWhenReady(selector: string, timeoutMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    const deadline = Date.now() + timeoutMs;
+    const poll = setInterval(() => {
+      const el = document.querySelector<HTMLElement>(selector);
+      if (el) {
+        clearInterval(poll);
+        el.click();
+        resolve();
+      } else if (Date.now() > deadline) {
+        clearInterval(poll);
+        resolve();
+      }
+    }, 150);
+  });
 }
 
 async function sessionCommand(path: string, body?: unknown): Promise<void> {
