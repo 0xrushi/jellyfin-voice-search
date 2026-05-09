@@ -8,7 +8,7 @@ the browser-native equivalent of [kodi-voice-search](../kodi-voice-search).
 | Requirement | Notes |
 |---|---|
 | Jellyfin Server ≥ 10.10 | .NET 8 build |
-| **File Transformation plugin** | Required — add `https://www.iamparadox.dev/jellyfin/plugins/manifest.json` as a repository in Jellyfin, then install from the catalogue |
+| **HTTPS or local override** | Browsers block microphone access on plain HTTP. Either serve Jellyfin over HTTPS (recommended — use nginx/Caddy with a TLS cert) or, for local testing only, whitelist the HTTP origin in Chrome: open `chrome://flags/#unsafely-treat-insecure-origin-as-secure`, add your Jellyfin URL (e.g. `http://192.168.1.x:8096`), and restart Chrome. |
 | Gemini API key (optional) | Strongly recommended. Without it, only basic title-exact search works via Chrome/Edge Web Speech API. With it: full intent parsing, Gemini-powered semantic search, and STT in all browsers. Get a free key at [aistudio.google.com](https://aistudio.google.com). |
 
 ## How it works
@@ -16,9 +16,8 @@ the browser-native equivalent of [kodi-voice-search](../kodi-voice-search).
 ```
 Jellyfin Server startup
   └─ StartupService (IScheduledTask, TriggerStartup)
-       └─ Registers index.html transformation via File Transformation plugin (reflection)
-            └─ TransformationPatches.IndexHtml() injects:
-                 <script defer src="/VoiceSearch/Script"></script>
+       └─ Patches IApplicationPaths.WebPath/index.html directly (idempotent)
+            └─ Injects: <script defer src="/VoiceSearch/Script"></script>
 
 Browser loads Jellyfin Web
   └─ Fetches /VoiceSearch/Script  → voiceSearch.js (embedded in DLL)
@@ -106,9 +105,8 @@ The NuGet packages come from the Jellyfin feed (`nuget.config` is included).
    https://raw.githubusercontent.com/0xrushi/jellyfin-voice-search/main/manifest.json
    ```
 2. Go to **Catalog**, find **Voice Search**, and click Install
-3. Install the **File Transformation** plugin from the Jellyfin plugin catalogue (if not already installed)
-4. Restart Jellyfin
-5. Go to **Dashboard → Plugins → Voice Search** and paste your Gemini API key
+3. Restart Jellyfin — the plugin patches `index.html` automatically on startup
+4. Go to **Dashboard → Plugins → Voice Search** and paste your Gemini API key
 
 ### Manual installation
 
@@ -116,9 +114,40 @@ The NuGet packages come from the Jellyfin feed (`nuget.config` is included).
 2. Extract and copy `Jellyfin.Plugin.VoiceSearch.dll` and `meta.json` into your Jellyfin plugins directory:
    - **Linux/Docker:** `/config/plugins/VoiceSearch_1.0.0.0/`
    - **Windows:** `%PROGRAMDATA%\Jellyfin\Server\plugins\VoiceSearch_1.0.0.0\`
-3. Install the **File Transformation** plugin from the Jellyfin plugin catalogue
-4. Restart Jellyfin
-5. Go to **Dashboard → Plugins → Voice Search** and paste your Gemini API key
+3. Restart Jellyfin — the plugin patches `index.html` automatically on startup
+4. Go to **Dashboard → Plugins → Voice Search** and paste your Gemini API key
+
+## Troubleshooting
+
+### Script not injected / mic button missing
+
+**1. Check injection status**
+
+Open in your browser:
+```
+http://<jellyfin-host>/VoiceSearch/Status
+```
+This returns:
+```json
+{
+  "webPath": "/jellyfin/jellyfin-web",
+  "indexPath": "/jellyfin/jellyfin-web/index.html",
+  "indexHtmlExists": true,
+  "scriptInjected": false
+}
+```
+If `indexHtmlExists` is `false`, Jellyfin is serving its web client from an unexpected path — open a GitHub issue with the `webPath` value.
+
+**2. Run the startup task manually**
+
+If `scriptInjected` is `false`: go to **Dashboard → Scheduled Tasks → Voice Search Startup** and click the play button. Refresh the Status endpoint to confirm it flips to `true`, then hard-refresh Jellyfin (Ctrl+Shift+R).
+
+### Microphone access denied
+
+Browsers block microphone access on plain HTTP. Two options:
+
+- **HTTPS (recommended):** Put Jellyfin behind a reverse proxy (nginx/Caddy) with a TLS certificate.
+- **Local testing only:** Open `chrome://flags/#unsafely-treat-insecure-origin-as-secure` in Chrome, add your Jellyfin URL (e.g. `http://192.168.1.x:8096`), enable, restart Chrome.
 
 ## Configuration
 
