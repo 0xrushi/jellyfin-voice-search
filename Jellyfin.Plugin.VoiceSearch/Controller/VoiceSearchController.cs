@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text.Json.Serialization;
 using Jellyfin.Plugin.VoiceSearch.Configuration;
+using MediaBrowser.Common.Configuration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -12,6 +13,34 @@ namespace Jellyfin.Plugin.VoiceSearch.Controller;
 [Route("[controller]")]
 public class VoiceSearchController : ControllerBase
 {
+    private readonly IApplicationPaths _applicationPaths;
+
+    public VoiceSearchController(IApplicationPaths applicationPaths)
+    {
+        _applicationPaths = applicationPaths;
+    }
+
+    /// <summary>Returns diagnostic info: WebPath, whether index.html exists, whether it's patched.</summary>
+    [HttpGet("Status")]
+    [AllowAnonymous]
+    [Produces("application/json")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public IActionResult GetStatus()
+    {
+        var webPath = _applicationPaths.WebPath;
+        var indexPath = Path.Combine(webPath, "index.html");
+        var exists = System.IO.File.Exists(indexPath);
+        var patched = exists && System.IO.File.ReadAllText(indexPath).Contains("jellyfin-voice-search-injected");
+
+        return Ok(new
+        {
+            webPath,
+            indexPath,
+            indexHtmlExists = exists,
+            scriptInjected = patched,
+        });
+    }
+
     /// <summary>
     /// Serves the compiled voiceSearch.js bundle (embedded in the DLL).
     /// Injected into index.html as: &lt;script defer src="/VoiceSearch/Script"&gt;
