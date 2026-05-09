@@ -9,6 +9,14 @@
     "owner": "0xrushi",
     "versions": [
       {
+        "checksum": "863bec770f07d7177353490eed30d668",
+        "changelog": "",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://github.com/0xrushi/jellyfin-voice-search/releases/download/v1.0.4.0/jellyfin-voice-search_1.0.4.0.zip",
+        "timestamp": "2026-05-09T01:29:05.0000000Z",
+        "version": "1.0.4.0"
+      },
+      {
         "checksum": "95d5d2f78420efe427c59c9986e4d77b",
         "changelog": "",
         "targetAbi": "10.10.0.0",
