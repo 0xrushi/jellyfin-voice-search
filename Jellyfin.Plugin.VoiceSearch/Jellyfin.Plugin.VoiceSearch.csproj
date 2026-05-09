@@ -21,7 +21,6 @@
     <PackageReference Include="Jellyfin.Common" Version="10.10.7" ExcludeAssets="runtime" />
     <PackageReference Include="Jellyfin.Model" Version="10.10.7" ExcludeAssets="runtime" />
     <PackageReference Include="Jellyfin.Controller" Version="10.10.7" ExcludeAssets="runtime" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" ExcludeAssets="runtime" />
   </ItemGroup>
 
   <!--

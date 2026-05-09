@@ -1,83 +1,59 @@
-using System.Runtime.Loader;
+using MediaBrowser.Common.Configuration;
 using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
 
 namespace Jellyfin.Plugin.VoiceSearch.Services;
 
-/// <summary>
-/// Runs at Jellyfin startup and registers the index.html transformation with
-/// the File Transformation plugin (github.com/IAmParadox27/jellyfin-plugin-file-transformation).
-///
-/// We use reflection so there is no hard compile-time dependency on that plugin —
-/// it simply won't inject the script if File Transformation isn't installed, and
-/// logs a warning instead.
-/// </summary>
 public class StartupService : IScheduledTask
 {
-    // Stable GUIDs — must not change between releases or the transformation
-    // will be registered twice after an update.
-    private static readonly Guid IndexHtmlTransformId =
-        Guid.Parse("b7c8d9e0-f1a2-3456-789a-bcde012345f6");
+    private const string ScriptTag = "<script defer src=\"/VoiceSearch/Script\"></script>";
+    private const string Marker    = "jellyfin-voice-search-injected";
 
     private readonly ILogger<StartupService> _logger;
+    private readonly IApplicationPaths _applicationPaths;
 
-    public StartupService(ILogger<StartupService> logger)
+    public StartupService(ILogger<StartupService> logger, IApplicationPaths applicationPaths)
     {
         _logger = logger;
+        _applicationPaths = applicationPaths;
     }
 
     public string Name        => "Voice Search Startup";
     public string Key         => "Jellyfin.Plugin.VoiceSearch.Startup";
-    public string Description => "Injects the voice-search script into the Jellyfin web client via File Transformation.";
+    public string Description => "Injects the voice-search script tag into Jellyfin's index.html.";
     public string Category    => "Startup Services";
 
     public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
     {
         progress.Report(0);
 
-        // Locate the File Transformation plugin assembly across all load contexts.
-        var ftAssembly = AssemblyLoadContext.All
-            .SelectMany(ctx => ctx.Assemblies)
-            .FirstOrDefault(a => a.FullName?.Contains(".FileTransformation") ?? false);
+        var indexHtmlPath = Path.Combine(_applicationPaths.WebPath, "index.html");
 
-        if (ftAssembly is null)
+        if (!File.Exists(indexHtmlPath))
         {
-            _logger.LogWarning(
-                "[VoiceSearch] File Transformation plugin not found. " +
-                "Install it from the Jellyfin plugin catalogue — Voice Search needs it to inject the client-side script.");
+            _logger.LogWarning("[VoiceSearch] index.html not found at {Path}", indexHtmlPath);
             progress.Report(100);
             return;
         }
 
-        var pluginInterfaceType = ftAssembly.GetType("Jellyfin.Plugin.FileTransformation.PluginInterface");
-        var registerMethod      = pluginInterfaceType?.GetMethod("RegisterTransformation");
+        var html = await File.ReadAllTextAsync(indexHtmlPath, cancellationToken).ConfigureAwait(false);
 
-        if (registerMethod is null)
+        if (html.Contains(Marker, StringComparison.Ordinal))
         {
-            _logger.LogError(
-                "[VoiceSearch] RegisterTransformation not found on Jellyfin.Plugin.FileTransformation.PluginInterface. " +
-                "The File Transformation plugin may be an incompatible version.");
+            _logger.LogInformation("[VoiceSearch] Script already injected, skipping.");
             progress.Report(100);
             return;
         }
 
-        // Build the JObject payload exactly as FileTransformation expects it.
-        var payload = new JObject
-        {
-            ["id"]               = IndexHtmlTransformId,
-            ["fileNamePattern"]  = "index.html",
-            ["callbackAssembly"] = typeof(StartupService).Assembly.FullName,
-            ["callbackClass"]    = "Jellyfin.Plugin.VoiceSearch.Helpers.TransformationPatches",
-            ["callbackMethod"]   = "IndexHtml",
-        };
+        var modified = html.Replace(
+            "</body>",
+            $"\n    <!-- {Marker} -->\n    {ScriptTag}\n</body>",
+            StringComparison.OrdinalIgnoreCase);
 
-        registerMethod.Invoke(null, new object?[] { payload });
+        await File.WriteAllTextAsync(indexHtmlPath, modified, cancellationToken).ConfigureAwait(false);
+        _logger.LogInformation("[VoiceSearch] Script injected into {Path}", indexHtmlPath);
 
-        _logger.LogInformation("[VoiceSearch] index.html transformation registered successfully.");
         progress.Report(100);
-
-        await Task.CompletedTask;
     }
 
     public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()

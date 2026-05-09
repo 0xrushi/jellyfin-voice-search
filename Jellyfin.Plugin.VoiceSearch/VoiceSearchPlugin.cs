@@ -29,8 +29,7 @@ public class VoiceSearchPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
     /// <inheritdoc />
     public override string Description =>
-        "Voice-controlled search and playback control for Jellyfin Web. " +
-        "Requires the File Transformation plugin.";
+        "Voice-controlled search and playback control for Jellyfin Web.";
 
     /// <inheritdoc />
     public IEnumerable<PluginPageInfo> GetPages()
