@@ -7,6 +7,15 @@
     "name": "Voice Search",
     "overview": "Adds a microphone button to Jellyfin Web for voice-controlled search and playback control.",
     "owner": "0xrushi",
-    "versions": []
+    "versions": [
+      {
+        "checksum": "89038c50a03955f16f5f1d1bdd163a40",
+        "changelog": "",
+        "targetAbi": "10.10.0.0",
+        "sourceUrl": "https://github.com/0xrushi/jellyfin-voice-search/releases/download/v1.0.0.0/jellyfin-voice-search_1.0.0.0.zip",
+        "timestamp": "2026-05-09T00:35:09.0000000Z",
+        "version": "1.0.0.0"
+      }
+    ]
   }
 ]
