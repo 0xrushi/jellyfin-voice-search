@@ -8,7 +8,7 @@ the browser-native equivalent of [kodi-voice-search](../kodi-voice-search).
 | Requirement | Notes |
 |---|---|
 | Jellyfin Server ≥ 10.10 | .NET 8 build |
-| **File Transformation plugin** | Required — installs from the Jellyfin plugin catalogue |
+| **File Transformation plugin** | Required — add `https://www.iamparadox.dev/jellyfin/plugins/manifest.json` as a repository in Jellyfin, then install from the catalogue |
 | Gemini API key (optional) | Strongly recommended. Without it, only basic title-exact search works via Chrome/Edge Web Speech API. With it: full intent parsing, Gemini-powered semantic search, and STT in all browsers. Get a free key at [aistudio.google.com](https://aistudio.google.com). |
 
 ## How it works
