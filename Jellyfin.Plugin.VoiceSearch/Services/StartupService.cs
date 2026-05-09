@@ -66,7 +66,7 @@ public class StartupService : IScheduledTask
         var payload = new JObject
         {
             ["id"]               = IndexHtmlTransformId,
-            ["fileNamePattern"]  = "index\\.html$",
+            ["fileNamePattern"]  = "index.html",
             ["callbackAssembly"] = typeof(StartupService).Assembly.FullName,
             ["callbackClass"]    = "Jellyfin.Plugin.VoiceSearch.Helpers.TransformationPatches",
             ["callbackMethod"]   = "IndexHtml",
