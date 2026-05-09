@@ -1,0 +1,136 @@
+name: Build and Publish Plugin
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get version from tag
+        id: version
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          echo "TAG=$TAG" >> $GITHUB_OUTPUT
+          echo "VERSION=${TAG#v}" >> $GITHUB_OUTPUT
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build TypeScript
+        run: npm ci && npm run build
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build plugin DLL
+        run: |
+          dotnet build Jellyfin.Plugin.VoiceSearch/Jellyfin.Plugin.VoiceSearch.csproj \
+            -c Release \
+            -o ./publish \
+            /p:Version=${{ steps.version.outputs.VERSION }}
+
+      - name: Package zip
+        run: |
+          cp Jellyfin.Plugin.VoiceSearch/meta.json ./publish/
+          cd publish
+          zip -j ../jellyfin-voice-search_${{ steps.version.outputs.VERSION }}.zip \
+            Jellyfin.Plugin.VoiceSearch.dll \
+            meta.json
+
+      - name: Compute MD5 checksum
+        id: md5
+        run: |
+          echo "CHECKSUM=$(md5sum jellyfin-voice-search_${{ steps.version.outputs.VERSION }}.zip | awk '{print $1}')" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.TAG }}
+          name: "v${{ steps.version.outputs.VERSION }}"
+          files: jellyfin-voice-search_${{ steps.version.outputs.VERSION }}.zip
+          generate_release_notes: true
+
+      - name: Update manifest.json
+        run: |
+          python3 - <<'EOF'
+          import json, os
+          from datetime import datetime, timezone
+
+          version   = os.environ['VERSION']
+          checksum  = os.environ['CHECKSUM']
+          repo      = os.environ['GITHUB_REPOSITORY']
+          tag       = os.environ['TAG']
+          zip_name  = f"jellyfin-voice-search_{version}.zip"
+          source_url = f"https://github.com/{repo}/releases/download/{tag}/{zip_name}"
+          timestamp  = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.0000000Z')
+
+          try:
+              with open('manifest.json') as f:
+                  manifest = json.load(f)
+          except FileNotFoundError:
+              manifest = []
+
+          with open('Jellyfin.Plugin.VoiceSearch/meta.json') as f:
+              meta = json.load(f)
+
+          plugin = next((p for p in manifest if p['guid'] == meta['guid']), None)
+          if plugin is None:
+              plugin = {
+                  'category': meta['category'],
+                  'description': meta['description'],
+                  'guid': meta['guid'],
+                  'imageUrl': meta.get('imageUrl', ''),
+                  'name': meta['name'],
+                  'overview': meta['overview'],
+                  'owner': meta['owner'],
+                  'versions': []
+              }
+              manifest.append(plugin)
+
+          new_entry = {
+              'checksum': checksum,
+              'changelog': '',
+              'targetAbi': meta.get('targetAbi', '10.10.0.0'),
+              'sourceUrl': source_url,
+              'timestamp': timestamp,
+              'version': version
+          }
+
+          # Newest first; drop any existing entry for this version
+          plugin['versions'] = [new_entry] + [
+              v for v in plugin['versions'] if v['version'] != version
+          ]
+
+          with open('manifest.json', 'w') as f:
+              json.dump(manifest, f, indent=2)
+
+          print(f"manifest.json updated for version {version}")
+          EOF
+        env:
+          VERSION:  ${{ steps.version.outputs.VERSION }}
+          CHECKSUM: ${{ steps.md5.outputs.CHECKSUM }}
+          TAG:      ${{ steps.version.outputs.TAG }}
+
+      - name: Commit and push manifest.json
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add manifest.json
+          git commit -m "chore: update manifest.json for ${{ steps.version.outputs.TAG }}"
+          git push origin HEAD:main

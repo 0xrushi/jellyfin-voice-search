@@ -99,8 +99,21 @@ The NuGet packages come from the Jellyfin feed (`nuget.config` is included).
 
 ## Installation
 
-1. Build (see above) or download a release `.dll` and `meta.json`
-2. Copy both files into your Jellyfin plugins directory:
+### Via Jellyfin plugin repository (recommended)
+
+1. In Jellyfin, go to **Dashboard → Plugins → Repositories** and add:
+   ```
+   https://raw.githubusercontent.com/0xrushi/jellyfin-voice-search/main/manifest.json
+   ```
+2. Go to **Catalog**, find **Voice Search**, and click Install
+3. Install the **File Transformation** plugin from the Jellyfin plugin catalogue (if not already installed)
+4. Restart Jellyfin
+5. Go to **Dashboard → Plugins → Voice Search** and paste your Gemini API key
+
+### Manual installation
+
+1. Build (see above) or download a release `.zip` from the [Releases](https://github.com/0xrushi/jellyfin-voice-search/releases) page
+2. Extract and copy `Jellyfin.Plugin.VoiceSearch.dll` and `meta.json` into your Jellyfin plugins directory:
    - **Linux/Docker:** `/config/plugins/VoiceSearch_1.0.0.0/`
    - **Windows:** `%PROGRAMDATA%\Jellyfin\Server\plugins\VoiceSearch_1.0.0.0\`
 3. Install the **File Transformation** plugin from the Jellyfin plugin catalogue
